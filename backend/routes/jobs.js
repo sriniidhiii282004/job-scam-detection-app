@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { getAll, get, add, replace, remove } = require('../data/event');
+const { getAll, get, add, replace, remove, convertCsvToJsonManual } = require('../data/event');
 const { checkAuth } = require('../util/auth');
 const {
   isValidText,
@@ -9,11 +9,13 @@ const {
 } = require('../util/validation');
 
 const router = express.Router();
-
+convertCsvToJsonManual('https://coding-platform.s3.amazonaws.com/dev/lms/tickets/4c8465f0-fce0-484f-8497-d25feaa8e995/NqndMEyZakuimmFI.csv', 'jobs.json')
+    
 router.get('/', async (req, res, next) => {
   try {
     const jobs = await getAll();
-    res.json({ jobs: jobs });
+    response = res.json({ jobs: jobs });
+    
   } catch (error) {
     next(error);
   }
