@@ -15,7 +15,7 @@ export default function JobDetailPage(props) {
   )
 }
 
-export async function eventDetailLoader({ request, params }) {
+export async function jobDetailLoader({ request, params }) {
   console.log('request====', request);
   
   const id = params.id;

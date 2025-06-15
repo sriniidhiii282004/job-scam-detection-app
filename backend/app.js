@@ -3,6 +3,7 @@ const express = require('express');
 
 const jobsRoutes = require('./routes/jobs');
 const authRoutes = require('./routes/auth');
+const visualRoutes = require('./routes/visuals');
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use((req, res, next) => {
 app.use(authRoutes);
 
 app.use('/jobs', jobsRoutes);
+app.use('/visuals', visualRoutes);
 
 app.use((error, req, res, next) => {
   const status = error.status || 500;

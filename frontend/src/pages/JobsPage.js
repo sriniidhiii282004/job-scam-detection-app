@@ -340,7 +340,7 @@ function JobsPage() {
 }
 
 // Loader function - loads ALL data from CSV
-export async function eventsLoader() {
+export async function jobsLoader() {
   // Replace this with your actual CSV loading logic
   const response = await fetch('http://localhost:8080/jobs');
   

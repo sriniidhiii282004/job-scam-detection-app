@@ -6,6 +6,8 @@ import joblib
 import pandas as pd
 import os
 import logging # For better logging than just print()
+import plotly.express as px
+import json
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,20 +27,11 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+TRAINING_DATA_PATH = "https://coding-platform.s3.amazonaws.com/dev/lms/tickets/4c8465f0-fce0-484f-8497-d25feaa8e995/NqndMEyZakuimmFI.csv"
+
+
 
 class JobFeatures(BaseModel):
-    # # IMPORTANT: Ensure these field names and types EXACTLY match
-    # # what your Node.js frontend sends and what your model was trained on.
-    # job_title_length: int = Field(..., description="Length of the job title string.")
-    # description_word_count: int = Field(..., description="Total number of words in the job description.")
-    # salary_deviation_factor: float = Field(..., description="Factor by which salary deviates from typical for the role (e.g., >1 for higher).")
-    # # You had 'contains_keywords_flag' in your original JobFeatures, but you are sending
-    # # 'contains_suspicious_keywords' from Node.js. Choose one and stick to it,
-    # # and make sure the type (int vs bool) matches as well.
-    # contains_suspicious_keywords: int = Field(..., description="1 if suspicious keywords found, 0 otherwise.")
-    # company_info_missing: int = Field(..., description="1 if critical company info is missing, 0 otherwise.")
-    # # Add ALL other features your model uses.
-
     job_id: str = Field(... , description = "Identifier for job")
     title: str = Field(... , description = "Title of the job"),
     location: str = Field(... , description = "Location of the job")
@@ -58,10 +51,17 @@ class JobFeatures(BaseModel):
     function: str = Field(... , description = "Role of the job" )
     fraudulent: str = Field(... , description = "Whether the job is fraud or genuine")
 
+class VisualFeatures(BaseModel):
+
+    id: str = Field(... , description = "Identifier for visual")
+    name: str = Field(... , description = "Name for visual like bar chart, histogram etc")
+    description: str = Field(... , description = "Description of the Visual")
+
 
 model = None
 feature_columns = None
 vectorizer = None
+dashboard_data_df = None
 
 
 @app.on_event("startup")
@@ -70,6 +70,7 @@ async def load_ml_model():
     global model
     global feature_columns
     global vectorizer
+    global dashboard_data_df
 
     logger.info("Attempting to load ML model and vectorizer...")
 
@@ -88,45 +89,36 @@ async def load_ml_model():
     except Exception as e:
         logger.critical(f"Failed to load ML model or Vectorizer: {e}", exc_info=True)
         raise RuntimeError(f"Failed to load ML model or Vectorizer: {e}")
+    
+    # # --- Load Training Data for Dashboard ---
+    # if not os.path.exists(TRAINING_DATA_PATH):
+    #     logger.error(f"Training data file not found at {TRAINING_DATA_PATH}. Dashboard will be empty.")
+    #     dashboard_data_df = pd.DataFrame() # Initialize empty DataFrame
+    
+    try:
+        # Load your training data. Ensure it has 'fraudulent', 'industry'
+        # Adjust read_csv parameters as needed for your specific file.
+        dashboard_data_df = pd.read_csv(TRAINING_DATA_PATH)
+        logger.info(f"Loaded {len(dashboard_data_df)} records from training data for dashboard.")
 
+        # Ensure necessary columns are present and correctly typed
+        if 'fraudulent' not in dashboard_data_df.columns:
+            logger.warning("'fraudulent' column not found in training data. Dashboard features might be limited.")
+            # You might need to add a dummy 'fraudulent' if it's truly missing and essential
+            # For this example, we assume it exists from your training process.
+        else:
+            dashboard_data_df['fraudulent'] = dashboard_data_df['fraudulent'].astype(bool)
 
-# @app.post("/predict", summary="Predict if a job posting is fraudulent")
-# async def predict_fraud(job_features: JobFeatures): # FastAPI expects job_features to be the incoming data
+        if 'industry' not in dashboard_data_df.columns:
+            logger.warning("'industry' column not found in training data. Defaulting to 'Unknown'.")
+            dashboard_data_df['industry'] = 'Unknown'
+        
+        logger.info("Training data loaded and preprocessed for dashboard visuals.")
 
-#     if model is None:
-#         raise HTTPException(status_code=503, detail="Prediction model is not loaded yet.")
+    except Exception as e:
+        logger.critical(f"Failed to load or process training data for dashboard: {e}", exc_info=True)
+        dashboard_data_df = pd.DataFrame() # Ensure it's an empty DataFrame on failure
 
-#     try:
-#         # Convert the Pydantic model to a dictionary, then to a pandas DataFrame
-#         # This input_data_dict will now contain the data from your Node.js request!
-#         input_data_dict = job_features.dict()
-#         input_df = pd.DataFrame([input_data_dict])
-
-#         # ... (rest of your prediction logic, which looks correct now) ...
-
-#         if feature_columns is not None:
-#              if not all(col in input_df.columns for col in feature_columns):
-#                 missing_cols = [col for col in feature_columns if col not in input_df.columns]
-#                 raise HTTPException(status_code=400, detail=f"Missing required features: {missing_cols}")
-#              input_df = input_df[feature_columns]
-#         else:
-#             logger.warning("Warning: feature_columns not loaded, relying on input data order.") # Changed from print
-
-#         prediction_proba = model.predict_proba(input_df)[:, 1][0]
-#         prediction_class = int(model.predict(input_df)[0])
-
-#         return {
-#             "is_fraudulent": bool(prediction_class),
-#             "fraud_probability": float(prediction_proba),
-#             "confidence": "high" if prediction_proba > 0.8 else ("medium" if prediction_proba > 0.6 else "low")
-#         }
-
-#     except KeyError as e:
-#         logger.error(f"Schema mismatch: Missing expected feature in input: {e}. Input: {job_features.dict()}", exc_info=True) # Changed from print
-#         raise HTTPException(status_code=400, detail=f"Missing expected feature in input: {e}. Please check your input JSON against the JobFeatures schema.")
-#     except Exception as e:
-#         logger.critical(f"An unexpected error occurred during prediction: {e}", exc_info=True) # Changed from print
-#         raise HTTPException(status_code=500, detail=f"Internal server error during prediction: {e}")
 
 
 @app.post("/predict")
@@ -165,8 +157,81 @@ async def predict_fraud(request: JobFeatures):
     except Exception as e:
         print(f"Error during prediction: {e}")
         return {"error": f"Prediction failed: {e}"}, 500
+    
 
-# Remember to also include your clean_text function in main.py:
+@app.get("/visuals/{id}")
+async def visual_of_jobs(id: str):
+    try:
+        # logger.info('request=====', {id})
+        # logger.info('visual api call at prediction model')
+        global dashboard_data_df
+
+        if dashboard_data_df is None or dashboard_data_df.empty:
+            logger.warning("No dashboard data loaded. Returning empty visuals.")
+            raise HTTPException(status_code=200, detail={
+                "message": "No data available to generate visuals. Please check TRAINING_DATA_PATH.",
+                "total_fraud_jobs": 0,
+                "percentage_fraud": 0.0,
+                "industry_chart": {},
+                "trend_chart": {}
+            })
+
+        try:
+            # --- Dashboard Metrics and Charts ---
+            total_jobs = len(dashboard_data_df)
+            fraudulent_jobs = dashboard_data_df[dashboard_data_df['fraudulent']].shape[0]
+            percentage_fraud = (fraudulent_jobs / total_jobs) * 100 if total_jobs > 0 else 0
+
+            # Chart 1: Fraudulent Jobs by Industry (Bar Chart)
+            # Ensure 'industry' column exists and handle NaNs if necessary
+            # We already handled 'industry' column during startup load, but good to be safe
+            dashboard_data_df['industry'] = dashboard_data_df['industry'].fillna('Unknown')
+            fraud_by_industry = dashboard_data_df[dashboard_data_df['fraudulent']].groupby('industry').size().reset_index(name='count')
+            fig_industry = px.bar(
+                fraud_by_industry,
+                x='industry',
+                y='count',
+                title='Fraudulent Jobs by Industry (from Training Data)',
+                labels={'count': 'Number of Fraudulent Jobs', 'industry': 'Industry'}
+            )
+            # plot_industry_json = fig_industry.to_dict()
+             # --- CHANGE IS HERE: Use fig_industry.to_json() ---
+            plot_industry_json_string = fig_industry.to_json()
+            # If you need it as a Python dictionary, you can load it back
+            plot_industry_json = json.loads(plot_industry_json_string)
+
+            # Chart 2: Trend of Fraudulent Jobs Over Time (Line Chart)
+            # Aggregate daily fraud counts
+            # We already ensured 'timestamp' is datetime during startup load
+            # #fraud_trend = dashboard_data_df[dashboard_data_df['fraudulent']].groupby(dashboard_data_df['timestamp'].dt.date).size().reset_index(name='count')
+            # fraud_trend = dashboard_data_df[dashboard_data_df['fraudulent']].size().reset_index(name='count')
+            # fraud_trend['date'] = pd.to_datetime(fraud_trend['date']) # Convert back to datetime for plotting for Plotly
+            # fig_trend = px.line(
+            #     fraud_trend,
+            #     x='date',
+            #     y='count',
+            #     title='Daily Fraudulent Job Count (from Training Data)',
+            #     labels={'count': 'Number of Fraudulent Jobs', 'date': 'Date'}
+            # )
+            # plot_trend_json = fig_trend.to_dict()
+
+            # return {
+                # "total_fraud_jobs": fraudulent_jobs,
+                # "percentage_fraud": round(percentage_fraud, 2),
+                # "industry_chart": plot_industry_json,
+                # "trend_chart": plot_trend_json
+                # Add more charts here as needed
+            # }
+            return plot_industry_json
+        except Exception as e:
+            logger.error(f"Error in get_job_visuals: {e}", exc_info=True)
+            
+            raise HTTPException(status_code=500, detail=f"Error retrieving or processing visual data: {e}")  
+    except:
+        print("Error in visual_of_jobs")
+
+
+# cleanes the text provided in the input:
 def clean_text(text):
     import re
     import nltk

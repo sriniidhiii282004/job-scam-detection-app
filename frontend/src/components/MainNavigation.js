@@ -17,6 +17,16 @@ console.log('token====', token);
           </li>
           <li>
             <NavLink
+              to="/visuals"
+              className={({ isActive }) =>
+                isActive ? classes.active : undefined
+              }
+            >
+              Visual Dashboard
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
               to="/jobs"
               className={({ isActive }) =>
                 isActive ? classes.active : undefined

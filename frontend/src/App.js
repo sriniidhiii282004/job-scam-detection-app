@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
 import EditJobPage from "./pages/EditJobPage";
-import JobDetailPage, { deleteEventAction, eventDetailLoader } from "./pages/JobDetailPage";
-import JobsPage, { eventsLoader } from "./pages/JobsPage";
+import JobDetailPage, { deleteEventAction, jobDetailLoader } from "./pages/JobDetailPage";
+import JobsPage, { jobsLoader } from "./pages/JobsPage";
 import HomePage from "./pages/HomePage";
 import NewJobPage, { newEventAction } from "./pages/NewJobPage";
 import RootLayout from "./RootLayout";
@@ -11,6 +11,7 @@ import { changeEventAction } from "./components/JobForm";
 import NewsletterPage, { newsletterAction } from './pages/NewsletterPage';
 import AuthenticationPage, { authAction } from "./pages/AuthenticationPage";
 import { checkAuthLoader, logoutAction, tokenLoader } from "./pages/Logout";
+import VisualDashboardPage, { visualsLoader } from "./pages/VisualDashboardPage";
 
 
 const router = createBrowserRouter([
@@ -32,12 +33,12 @@ const router = createBrowserRouter([
           {
             index: true,
             element: <JobsPage/>,
-            loader: eventsLoader,
+            loader: jobsLoader,
           },
           {
             path: ':id',
             id:'event-detail',
-            loader: eventDetailLoader,
+            loader: jobDetailLoader,
             children: [
               {
                 index: true,
@@ -65,6 +66,11 @@ const router = createBrowserRouter([
         path: 'newsletter',
         element: <NewsletterPage />,
         action: newsletterAction,
+      },
+       {
+        path: 'visuals',
+        element: <VisualDashboardPage />,
+        loader: visualsLoader,
       },
       {
         path: 'auth',
